@@ -11,8 +11,9 @@ const ViewPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Try to load from the URL data parameter (Real Sharing)
-    const searchParams = new URLSearchParams(location.search);
+    // Robust parsing for HashRouter query strings
+    const searchString = location.search || window.location.hash.split('?')[1] || '';
+    const searchParams = new URLSearchParams(searchString);
     const encodedData = searchParams.get('data');
 
     if (encodedData) {
@@ -27,7 +28,7 @@ const ViewPage: React.FC = () => {
       }
     }
 
-    // 2. Fallback to Local Storage (Same browser history)
+    // Fallback to Local Storage
     const saved = localStorage.getItem(`postcard_${id}`);
     if (saved) {
       try {
@@ -88,7 +89,6 @@ const ViewPage: React.FC = () => {
             backgroundColor: design.backgroundColor,
           }}
         >
-          {/* Customizable Pattern Overlay Layer */}
           {design.backgroundPattern && design.backgroundPattern !== '' && (
             <div 
               className="absolute inset-0 pointer-events-none" 
