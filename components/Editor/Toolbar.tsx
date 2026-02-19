@@ -2,6 +2,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PostcardDesign } from '../../types';
+import * as htmlToImage from 'html-to-image';
+import { jsPDF } from 'jspdf';
 
 interface ToolbarProps {
   design: PostcardDesign;
@@ -20,24 +22,10 @@ const Toolbar: React.FC<ToolbarProps> = ({ design, undo, redo, canUndo, canRedo,
 
   const getShareableLink = () => {
     try {
-      // Create a compact version of the design for the URL
-      // Remove large data blobs for stickers if they are from external URLs
-      const compactElements = design.elements.map(el => {
-        if (el.content.startsWith('data:image')) {
-          // If it's a small base64, keep it, otherwise maybe skip? 
-          // For now let's just keep the state as is but strip unnecessary metadata
-          return { ...el };
-        }
-        return el;
-      });
-
-      const minimalDesign = { 
-        ...design, 
-        elements: compactElements.filter(e => e.content.length < 5000) // Exclude massive images from link
-      };
+      const compactElements = design.elements.filter(e => e.content.length < 10000);
+      const minimalDesign = { ...design, elements: compactElements };
       const dataStr = JSON.stringify(minimalDesign);
       const encodedData = btoa(encodeURIComponent(dataStr));
-      
       const baseUrl = window.location.origin + window.location.pathname;
       return `${baseUrl}#/view/${design.id}?data=${encodedData}`;
     } catch (e) {
@@ -46,20 +34,25 @@ const Toolbar: React.FC<ToolbarProps> = ({ design, undo, redo, canUndo, canRedo,
     }
   };
 
-  const downloadImage = async () => {
-    const canvas = document.getElementById('postcard-canvas');
-    if (!canvas) return;
+  const prepareForExport = async () => {
     setIsExporting(true);
+    // Wait for fonts to be definitely ready
+    await document.fonts.ready;
+    const canvas = document.getElementById('postcard-canvas');
+    if (!canvas) throw new Error("Canvas not found");
+    return canvas;
+  };
+
+  const downloadImage = async () => {
     try {
-      const htmlToImage = await import('https://esm.sh/html-to-image@1.11.11');
+      const canvas = await prepareForExport();
       const dataUrl = await htmlToImage.toPng(canvas, { 
         quality: 1.0, 
         pixelRatio: 3,
-        fontEmbedCSS: true,
-        backgroundColor: design.backgroundColor,
+        style: { transform: 'scale(1)', transformOrigin: 'top left' }
       });
       const link = document.createElement('a');
-      link.download = `cozy-postcard-${Date.now()}.png`;
+      link.download = `cozy-postcard-${design.name.toLowerCase().replace(/\s+/g, '-')}.png`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
@@ -70,8 +63,36 @@ const Toolbar: React.FC<ToolbarProps> = ({ design, undo, redo, canUndo, canRedo,
     }
   };
 
+  const downloadPdf = async () => {
+    try {
+      const canvas = await prepareForExport();
+      const dataUrl = await htmlToImage.toPng(canvas, { 
+        quality: 1.0, 
+        pixelRatio: 3 
+      });
+      
+      const isLandscape = design.orientation === 'landscape';
+      const pdf = new jsPDF({
+        orientation: isLandscape ? 'l' : 'p',
+        unit: 'px',
+        format: isLandscape ? [800, 533] : [533, 800]
+      });
+
+      const width = pdf.internal.pageSize.getWidth();
+      const height = pdf.internal.pageSize.getHeight();
+      
+      pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+      pdf.save(`cozy-postcard-${design.id}.pdf`);
+    } catch (err) {
+      console.error('PDF generation failed', err);
+      alert("Failed to create PDF. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
-    <div className="h-16 bg-[#FDFCFB] border-b-2 border-[#D5B9B2] flex items-center justify-between px-6 z-50 shadow-sm">
+    <div className="h-16 bg-[#FDFCFB] border-b-2 border-[#D5B9B2] flex items-center justify-between px-6 z-50 shadow-sm no-print">
       <div className="flex items-center gap-6">
         <button 
           onClick={() => navigate('/')} 
@@ -126,7 +147,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ design, undo, redo, canUndo, canRedo,
              {isExporting && (
                 <div className="absolute inset-0 bg-white/95 z-[110] flex flex-col items-center justify-center space-y-5">
                   <div className="w-16 h-16 border-4 border-[#2D3047] border-t-transparent rounded-full animate-spin"></div>
-                  <p className="font-bold text-[#2D3047] text-lg font-accent">Polishing your masterpiece...</p>
+                  <p className="font-bold text-[#2D3047] text-lg font-accent text-center px-4">Gathering your craft supplies...</p>
                 </div>
               )}
             
@@ -136,17 +157,28 @@ const Toolbar: React.FC<ToolbarProps> = ({ design, undo, redo, canUndo, canRedo,
             </div>
 
             <div className="space-y-4">
-              <button 
-                onClick={downloadImage} 
-                className="w-full py-5 bg-[#E29578] text-white font-bold rounded-2xl hover:bg-[#d48467] transition-all shadow-[0_5px_0_#b36d54] active:shadow-none active:translate-y-1 flex items-center justify-center gap-3 uppercase tracking-widest"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Download PNG
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={downloadImage} 
+                  className="py-5 bg-[#E29578] text-white font-bold rounded-2xl hover:bg-[#d48467] transition-all shadow-[0_5px_0_#b36d54] active:shadow-none active:translate-y-1 flex flex-col items-center justify-center gap-2 uppercase tracking-widest text-[10px]"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Image
+                </button>
+                <button 
+                  onClick={downloadPdf} 
+                  className="py-5 bg-[#81B29A] text-white font-bold rounded-2xl hover:bg-[#6fa088] transition-all shadow-[0_5px_0_#5a8c75] active:shadow-none active:translate-y-1 flex flex-col items-center justify-center gap-2 uppercase tracking-widest text-[10px]"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                  PDF Document
+                </button>
+              </div>
               
-              <div className="space-y-2">
+              <div className="space-y-2 pt-4">
                 <label className="text-[10px] font-bold uppercase text-gray-400 tracking-widest ml-1">Shareable Link</label>
                 <div className="p-4 bg-[#F9F7F5] rounded-2xl border-2 border-[#D5B9B2]/30 flex items-center gap-3 shadow-inner">
                   <input readOnly value={getShareableLink()} className="flex-1 bg-transparent text-[11px] font-mono outline-none text-[#2D3047] overflow-hidden" />
