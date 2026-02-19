@@ -33,6 +33,8 @@ export interface PostcardDesign {
   backgroundColor: string;
   backgroundPattern?: string;
   backgroundPatternColor?: string;
+  backgroundTexture?: string;
+  backgroundTextureColor?: string;
   elements: PostcardElement[];
   createdAt: string;
   updatedAt: string;
