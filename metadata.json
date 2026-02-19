@@ -1,0 +1,7 @@
+{
+  "name": "Cozy Postcard Studio",
+  "description": "A warm, craft-inspired postcard creator with drag-and-drop editing, soft textures, and easy sharing features.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
