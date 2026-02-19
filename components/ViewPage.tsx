@@ -11,6 +11,7 @@ const ViewPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Robust parsing for HashRouter query strings
     const searchString = location.search || window.location.hash.split('?')[1] || '';
     const searchParams = new URLSearchParams(searchString);
     const encodedData = searchParams.get('data');
@@ -27,6 +28,7 @@ const ViewPage: React.FC = () => {
       }
     }
 
+    // Fallback to Local Storage
     const saved = localStorage.getItem(`postcard_${id}`);
     if (saved) {
       try {
@@ -87,33 +89,17 @@ const ViewPage: React.FC = () => {
             backgroundColor: design.backgroundColor,
           }}
         >
-          {/* Texture Layer */}
-          {design.backgroundTexture && (
-            <div 
-              className="absolute inset-0 pointer-events-none" 
-              style={{ 
-                backgroundColor: design.backgroundTextureColor || '#FFFFFF',
-                backgroundImage: `url(${design.backgroundTexture})`,
-                backgroundRepeat: 'repeat',
-                mixBlendMode: 'multiply',
-                opacity: 0.8
-              }}
-            />
-          )}
-
-          {/* Pattern Layer */}
           {design.backgroundPattern && design.backgroundPattern !== '' && (
             <div 
               className="absolute inset-0 pointer-events-none" 
               style={{ 
                 backgroundColor: design.backgroundPatternColor || '#2D3047',
-                WebkitMaskImage: `url("${design.backgroundPattern}")`,
-                maskImage: `url("${design.backgroundPattern}")`,
+                WebkitMaskImage: `url(${design.backgroundPattern})`,
+                maskImage: `url(${design.backgroundPattern})`,
                 WebkitMaskRepeat: 'repeat',
                 maskRepeat: 'repeat',
-                WebkitMaskSize: 'auto',
-                maskSize: 'auto',
-                opacity: 0.4
+                opacity: 0.5,
+                mixBlendMode: 'multiply'
               }}
             />
           )}
@@ -144,7 +130,7 @@ const ViewPage: React.FC = () => {
               ) : (
                 <img 
                   src={el.content} 
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-cover"
                   style={{
                     borderRadius: `${el.style.borderRadius}px`,
                     filter: `brightness(${el.style.brightness}%) contrast(${el.style.contrast}%)`,
